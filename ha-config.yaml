@@ -1,0 +1,54 @@
+# Add this to Home Assistant configuration.yaml
+# Then restart HA or reload config
+
+# REST sensor - polls Borg Sentinel every 5 minutes
+rest:
+  - resource: "http://192.168.50.200:3333/api/status"
+    scan_interval: 300
+    sensor:
+      - name: "Borg Sentinel Overall"
+        value_template: "{{ value_json.overall }}"
+        json_attributes_path: "$"
+        json_attributes:
+          - last_check
+          - check_duration_ms
+          - alerts_active
+      - name: "Borg Sentinel Proxmox"
+        value_template: "{{ value_json.services.proxmox.status }}"
+      - name: "Borg Sentinel Home Assistant"
+        value_template: "{{ value_json.services.homeassistant.status }}"
+      - name: "Borg Sentinel Plex"
+        value_template: "{{ value_json.services.plex.status }}"
+      - name: "Borg Sentinel DSM"
+        value_template: "{{ value_json.services.dsm.status }}"
+      - name: "Borg Sentinel Internet"
+        value_template: "{{ value_json.services.internet.status }}"
+      - name: "Borg Sentinel Queen"
+        value_template: "{{ value_json.services.queen.status }}"
+      - name: "Borg Sentinel Hive Monitor"
+        value_template: "{{ value_json.services.hive_monitor.status }}"
+      - name: "Borg Sentinel Workers"
+        value_template: "{{ value_json.services.workers.status }}"
+      - name: "Borg Sentinel WhatsApp"
+        value_template: "{{ value_json.services.whatsapp.status }}"
+      - name: "Borg Sentinel MongoDB"
+        value_template: "{{ value_json.services.mongodb.status }}"
+      - name: "Borg Sentinel Calendar GPT"
+        value_template: "{{ value_json.services.calendar_gpt.status }}"
+
+# Lovelace card (add to dashboard)
+# type: entities
+# title: "🛡️ Borg Sentinel"
+# entities:
+#   - entity: sensor.borg_sentinel_overall
+#   - entity: sensor.borg_sentinel_proxmox
+#   - entity: sensor.borg_sentinel_home_assistant
+#   - entity: sensor.borg_sentinel_plex
+#   - entity: sensor.borg_sentinel_dsm
+#   - entity: sensor.borg_sentinel_internet
+#   - entity: sensor.borg_sentinel_queen
+#   - entity: sensor.borg_sentinel_hive_monitor
+#   - entity: sensor.borg_sentinel_workers
+#   - entity: sensor.borg_sentinel_whatsapp
+#   - entity: sensor.borg_sentinel_mongodb
+#   - entity: sensor.borg_sentinel_calendar_gpt
