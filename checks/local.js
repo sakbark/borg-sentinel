@@ -8,10 +8,17 @@ async function checkProxmox() {
   const tokenId = process.env.PROXMOX_TOKEN_ID;
   const tokenSecret = process.env.PROXMOX_TOKEN_SECRET;
 
-  // If no API token, just check if the web UI is responsive
+  // If no API token, just check if the web UI is responsive (401 = server is up)
   if (!tokenId || !tokenSecret) {
     const start = Date.now();
-    await axios.get(`https://${host}:8006/api2/json`, { httpsAgent: agent, timeout: 5000 });
+    try {
+      await axios.get(`https://${host}:8006/api2/json`, { httpsAgent: agent, timeout: 5000 });
+    } catch (err) {
+      if (err.response && err.response.status === 401) {
+        return { status: 'up', response_ms: Date.now() - start, details: { note: 'no API token - 401 means server responding' } };
+      }
+      throw err;
+    }
     return { status: 'up', response_ms: Date.now() - start, details: { note: 'no API token - UI check only' } };
   }
 
