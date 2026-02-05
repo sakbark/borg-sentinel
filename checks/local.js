@@ -19,36 +19,44 @@ function tcpPing(host, port, timeout = 5000) {
 
 async function checkProxmox() {
   const host = process.env.PROXMOX_HOST || '192.168.50.122';
+  const tailscaleHost = process.env.PROXMOX_TAILSCALE_HOST || '100.74.69.38';
   const tokenId = process.env.PROXMOX_TOKEN_ID;
   const tokenSecret = process.env.PROXMOX_TOKEN_SECRET;
+  const fs = require('fs');
 
-  // If no API token: if we're running inside Proxmox LXC, we ARE on Proxmox
-  // The LXC can't reach the host IP via bridge, so use uptime as proof-of-life
+  // Always get LXC uptime as baseline
+  const uptime = fs.readFileSync('/proc/uptime', 'utf8').split(' ')[0];
+  const uptimeSec = Math.round(parseFloat(uptime));
+
+  // If no API token, just report LXC uptime (proves Proxmox is running)
   if (!tokenId || !tokenSecret) {
-    const fs = require('fs');
-    const uptime = fs.readFileSync('/proc/uptime', 'utf8').split(' ')[0];
-    return { status: 'up', response_ms: 0, details: { note: 'Running inside Proxmox LXC', host_uptime_sec: Math.round(parseFloat(uptime)) } };
+    return { status: 'up', response_ms: 0, details: { note: 'Running inside Proxmox LXC', lxc_uptime_sec: uptimeSec } };
   }
 
+  // Try API via Tailscale IP (LXC can't reach host via bridge)
   const start = Date.now();
   const headers = { Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}` };
-  const base = `https://${host}:8006/api2/json`;
 
-  const [nodeRes, vmRes] = await Promise.all([
-    axios.get(`${base}/nodes`, { headers, httpsAgent: agent, timeout: LOCAL_TIMEOUT }),
-    axios.get(`${base}/nodes/${process.env.PROXMOX_NODE || 'pve'}/qemu`, { headers, httpsAgent: agent, timeout: LOCAL_TIMEOUT }).catch(() => null)
-  ]);
+  try {
+    const base = `https://${tailscaleHost}:8006/api2/json`;
+    const [nodeRes, vmRes] = await Promise.all([
+      axios.get(`${base}/nodes`, { headers, httpsAgent: agent, timeout: 8000 }),
+      axios.get(`${base}/nodes/${process.env.PROXMOX_NODE || 'pve'}/qemu`, { headers, httpsAgent: agent, timeout: 8000 }).catch(() => null)
+    ]);
 
-  const node = nodeRes.data?.data?.[0] || {};
-  const cpuPct = Math.round((node.cpu || 0) * 100);
-  const ramPct = Math.round(((node.mem || 0) / (node.maxmem || 1)) * 100);
+    const node = nodeRes.data?.data?.[0] || {};
+    const cpuPct = Math.round((node.cpu || 0) * 100);
+    const ramPct = Math.round(((node.mem || 0) / (node.maxmem || 1)) * 100);
 
-  const details = { cpu: cpuPct, ram_pct: ramPct };
-  if (vmRes?.data?.data) {
-    details.vms = vmRes.data.data.map(v => ({ name: v.name, status: v.status }));
+    const details = { cpu: cpuPct, ram_pct: ramPct, lxc_uptime_sec: uptimeSec };
+    if (vmRes?.data?.data) {
+      details.vms = vmRes.data.data.map(v => ({ name: v.name, status: v.status }));
+    }
+    return { status: 'up', response_ms: Date.now() - start, details };
+  } catch (err) {
+    // API failed but LXC is running = Proxmox is up
+    return { status: 'up', response_ms: 0, details: { note: 'API unreachable, but LXC running', lxc_uptime_sec: uptimeSec, api_error: err.message } };
   }
-
-  return { status: 'up', response_ms: Date.now() - start, details };
 }
 
 async function checkHomeAssistant() {
