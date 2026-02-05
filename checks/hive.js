@@ -26,7 +26,7 @@ async function checkHiveMonitor(db) {
 async function checkWorkers(db) {
   const workers = await db.collection('ai_coordination').find({
     type: 'borg_worker_active',
-    status: 'active',
+    status: { $in: ['online', 'active'] },
     last_heartbeat: { $gte: new Date(Date.now() - 10 * 60 * 1000) }
   }).toArray();
 
