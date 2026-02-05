@@ -9,6 +9,27 @@ function getState(name) {
 }
 
 async function sendPushover(title, message, priority = 0) {
+  // Try direct Pushover API first (more reliable)
+  const userKey = process.env.PUSHOVER_USER_KEY;
+  const apiToken = process.env.PUSHOVER_API_TOKEN;
+
+  if (userKey && apiToken) {
+    try {
+      await axios.post('https://api.pushover.net/1/messages.json', {
+        token: apiToken,
+        user: userKey,
+        title,
+        message,
+        priority
+      }, { timeout: 10000 });
+      console.log(`[PUSHOVER] Sent direct: ${title}`);
+      return;
+    } catch (err) {
+      console.error(`[PUSHOVER] Direct failed: ${err.message}, trying Calendar GPT proxy...`);
+    }
+  }
+
+  // Fallback: Calendar GPT proxy
   const url = process.env.CALENDAR_GPT_URL;
   const apiKey = process.env.CALENDAR_GPT_API_KEY;
   if (!url || !apiKey) {
@@ -18,16 +39,14 @@ async function sendPushover(title, message, priority = 0) {
 
   try {
     await axios.post(`${url}/pushover/send`, {
-      title,
-      message,
-      priority
+      title, message, priority
     }, {
       headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
       timeout: 10000
     });
-    console.log(`[PUSHOVER] Sent: ${title}`);
+    console.log(`[PUSHOVER] Sent via proxy: ${title}`);
   } catch (err) {
-    console.error(`[PUSHOVER] Failed: ${err.message}`);
+    console.error(`[PUSHOVER] All methods failed: ${err.message}`);
   }
 }
 
