@@ -8,18 +8,27 @@ async function checkProxmox() {
   const tokenId = process.env.PROXMOX_TOKEN_ID;
   const tokenSecret = process.env.PROXMOX_TOKEN_SECRET;
 
-  // If no API token, just check if the web UI is responsive (401 = server is up)
+  // If no API token, try HTTPS first, fallback to TCP ping on port 8006
   if (!tokenId || !tokenSecret) {
     const start = Date.now();
     try {
       await axios.get(`https://${host}:8006/api2/json`, { httpsAgent: agent, timeout: 5000 });
+      return { status: 'up', response_ms: Date.now() - start, details: { note: 'no API token - UI check only' } };
     } catch (err) {
       if (err.response && err.response.status === 401) {
-        return { status: 'up', response_ms: Date.now() - start, details: { note: 'no API token - 401 means server responding' } };
+        return { status: 'up', response_ms: Date.now() - start, details: { note: 'API responding (401 - no token)' } };
       }
-      throw err;
+      // HTTPS failed - try TCP ping (LXC can't always reach host HTTPS)
+      const net = require('net');
+      return new Promise((resolve, reject) => {
+        const sock = new net.Socket();
+        sock.setTimeout(3000);
+        sock.on('connect', () => { sock.destroy(); resolve({ status: 'up', response_ms: Date.now() - start, details: { note: 'TCP port 22 reachable' } }); });
+        sock.on('timeout', () => { sock.destroy(); reject(new Error('TCP timeout')); });
+        sock.on('error', (e) => { sock.destroy(); reject(e); });
+        sock.connect(22, host);
+      });
     }
-    return { status: 'up', response_ms: Date.now() - start, details: { note: 'no API token - UI check only' } };
   }
 
   const start = Date.now();
